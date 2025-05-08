@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const bookingSchema = mongoose.Schema({
+const bookingSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
@@ -11,15 +11,11 @@ const bookingSchema = mongoose.Schema({
         ref: 'Pet',
         required: true
     },
-    visitDate: {
+    bookingDate: {
         type: Date,
         required: true
     },
-    visitTime: {
-        type: String,
-        required: true
-    },
-    fullName: {
+    name: {
         type: String,
         required: true
     },
@@ -27,25 +23,48 @@ const bookingSchema = mongoose.Schema({
         type: String,
         required: true
     },
-    phoneNumber: {
+    phone: {
         type: String,
         required: true
     },
     message: {
-        type: String,
-        default: ''
+        type: String
     },
     status: {
         type: String,
-        enum: ['Pending', 'Confirmed', 'Canceled', 'Completed'],
-        default: 'Pending'
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
+        enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+        default: 'pending'
     }
+}, {
+    timestamps: true
 });
 
-const Booking = mongoose.model('Booking', bookingSchema);
+// Add an index for checking time conflicts
+bookingSchema.index({ pet: 1, bookingDate: 1 });
 
-module.exports = Booking; 
+// Static method to check for booking conflicts
+bookingSchema.statics.checkConflict = async function(petId, bookingDate) {
+    // Convert to Date object if string
+    const date = new Date(bookingDate);
+    
+    // Get start and end of the hour (±30 minutes from the target time)
+    const startTime = new Date(date);
+    startTime.setMinutes(date.getMinutes() - 30);
+    
+    const endTime = new Date(date);
+    endTime.setMinutes(date.getMinutes() + 30);
+    
+    // Find any bookings for the same pet in the time range
+    const conflictingBooking = await this.findOne({
+        pet: petId,
+        bookingDate: { 
+            $gte: startTime,
+            $lte: endTime
+        },
+        status: { $nin: ['cancelled'] } // Exclude cancelled bookings
+    });
+    
+    return conflictingBooking;
+};
+
+module.exports = mongoose.model('Booking', bookingSchema); 

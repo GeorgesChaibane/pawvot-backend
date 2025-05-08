@@ -68,10 +68,6 @@ const UserSchema = new mongoose.Schema({
         enum: ['user', 'admin'],
         default: 'user'
     },
-    avatar: {
-        type: String,
-        default: 'default-avatar.jpg'
-    },
     phoneNumber: {
         type: String,
         trim: true
@@ -99,18 +95,10 @@ const UserSchema = new mongoose.Schema({
     lastLogin: {
         type: Date
     },
-    favorites: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Pet'
-    }],
     orders: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Order'
     }],
-    profilePicture: {
-        type: String,
-        default: 'default-profile.jpg'
-    },
     cart: [{
         product: {
             type: mongoose.Schema.Types.ObjectId,

@@ -282,4 +282,37 @@ router.get('/search/:keyword', async (req, res) => {
   }
 });
 
+/**
+ * @route GET /api/products/search
+ * @desc Search products by query
+ * @access Public
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({ message: 'Search query is required' });
+    }
+    
+    const searchRegex = new RegExp(query, 'i');
+    
+    const products = await Product.find({
+      isActive: true,
+      $or: [
+        { name: searchRegex },
+        { description: searchRegex },
+        { brand: searchRegex },
+        { category: searchRegex },
+        { tags: searchRegex }
+      ]
+    }).sort({ createdAt: -1 });
+    
+    res.status(200).json(products);
+  } catch (error) {
+    console.error('Error searching products:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router; 

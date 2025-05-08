@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - Pawvot</title>
+    <style>
+        /* Base styles */
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        
+        /* Container */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Header */
+        .header {
+            background-color: #FF6B6B;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        /* Logo */
+        .logo {
+            max-width: 120px;
+            margin-bottom: 20px;
+        }
+        
+        /* Content */
+        .content {
+            padding: 30px;
+        }
+        
+        /* Button */
+        .button {
+            display: inline-block;
+            background-color: #FF6B6B;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        
+        /* Link Container */
+        .link-container {
+            margin: 30px 0;
+            word-break: break-all;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* Footer */
+        .footer {
+            background-color: #f5f5f5;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .social-icons {
+            margin-top: 15px;
+        }
+        
+        .social-icons a {
+            display: inline-block;
+            margin: 0 5px;
+        }
+        
+        /* Responsive */
+        @media screen and (max-width: 600px) {
+            .container {
+                width: 100%;
+                border-radius: 0;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="../client/build/pawvot.png" alt="Pawvot Logo" class="logo">
+            <h1>Verify Your Email</h1>
+        </div>
+        
+        <div class="content">
+            <p>Hi {{name}},</p>
+            
+            <p>Thank you for registering with Pawvot! We're excited to have you join our community of pet lovers. Before you can start using your account, please verify your email address by clicking the button below:</p>
+            
+            <div style="text-align: center;">
+                <a href="{{verificationLink}}" class="button">Verify Email Address</a>
+            </div>
+            
+            <p>This link will expire in 24 hours. If you didn't create an account with Pawvot, you can safely ignore this email.</p>
+            
+            <p>If the button above doesn't work, you can copy and paste the following link into your browser:</p>
+            
+            <div class="link-container">
+                {{verificationLink}}
+            </div>
+            
+            <p>At Pawvot, we're dedicated to helping pets find loving homes and providing quality products for your furry friends. We can't wait for you to explore everything our platform has to offer!</p>
+            
+            <p>Best regards,<br>The Pawvot Team</p>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; {{year}} Pawvot. All rights reserved.</p>
+            
+            <div class="social-icons">
+                <a href="#"><img src="../templates/facebook.png" alt="Facebook"></a>
+                <a href="#"><img src="../templates/instagram.png" alt="Instagram"></a>
+                <a href="#"><img src="../templates/tik-tok.png" alt="TikTok"></a>
+                <a href="#"><img src="../templates/twitter.png" alt="Twitter"></a>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

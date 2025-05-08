@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Pet = require('../Models/Pet');
+const mongoose = require('mongoose');
 const { fetchDogImages, fetchCatImages, processDogData, processCatData } = require('../utils/apiHelper');
 
 /**
@@ -10,21 +11,42 @@ const { fetchDogImages, fetchCatImages, processDogData, processCatData } = requi
  */
 router.get('/', async (req, res) => {
     try {
-        // Fetch 3 dogs and 3 cats (including mixed breeds)
-        const dogs = await Pet.find({ 
-            type: 'Dog'
-        }).sort({ createdAt: -1 }).limit(3);
-        
-        const cats = await Pet.find({ 
-            type: 'Cat'
-        }).sort({ createdAt: -1 }).limit(3);
-        
-        // Combine dogs and cats
-        const pets = [...dogs, ...cats];
-        
+        const pets = await Pet.find({}).sort({ createdAt: -1 });
         res.status(200).json(pets);
     } catch (error) {
         console.error('Error fetching pets:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+/**
+ * @route GET /api/pets/search
+ * @desc Search pets by query
+ * @access Public
+ */
+router.get('/search', async (req, res) => {
+    try {
+        const { query } = req.query;
+        
+        if (!query) {
+            return res.status(400).json({ message: 'Search query is required' });
+        }
+        
+        const searchRegex = new RegExp(query, 'i');
+        
+        const pets = await Pet.find({
+            $or: [
+                { name: searchRegex },
+                { breed: searchRegex },
+                { type: searchRegex },
+                { location: searchRegex },
+                { description: searchRegex }
+            ]
+        }).sort({ createdAt: -1 });
+        
+        res.status(200).json(pets);
+    } catch (error) {
+        console.error('Error searching pets:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -123,12 +145,19 @@ router.get('/locations', async (req, res) => {
 
 /**
  * @route GET /api/pets/:id
- * @desc Get pet by ID
+ * @desc Get a pet by ID
  * @access Public
  */
 router.get('/:id', async (req, res) => {
     try {
-        const pet = await Pet.findById(req.params.id);
+        const { id } = req.params;
+        
+        // Check if the ID is a valid MongoDB ObjectID
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid pet ID format' });
+        }
+        
+        const pet = await Pet.findById(id);
         
         if (!pet) {
             return res.status(404).json({ message: 'Pet not found' });
@@ -137,11 +166,6 @@ router.get('/:id', async (req, res) => {
         res.status(200).json(pet);
     } catch (error) {
         console.error('Error fetching pet:', error);
-        
-        if (error.kind === 'ObjectId') {
-            return res.status(404).json({ message: 'Pet not found' });
-        }
-        
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -257,28 +281,72 @@ router.get('/update-cats', async (req, res) => {
 
 /**
  * @route POST /api/pets
- * @desc Create a pet
- * @access Public (in production should be Private)
+ * @desc Create a new pet
+ * @access Private/Admin
  */
 router.post('/', async (req, res) => {
     try {
-        const { type, name, breed, age, location, image, imageId, description } = req.body;
-        
-        const newPet = new Pet({
-            type,
-            name,
-            breed,
-            age,
-            location,
-            image,
-            imageId,
-            description: description || '',
-        });
-        
-        const pet = await newPet.save();
-        res.status(201).json(pet);
+        const newPet = new Pet(req.body);
+        const savedPet = await newPet.save();
+        res.status(201).json(savedPet);
     } catch (error) {
         console.error('Error creating pet:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+/**
+ * @route PUT /api/pets/:id
+ * @desc Update a pet
+ * @access Private/Admin
+ */
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid pet ID format' });
+        }
+        
+        const updatedPet = await Pet.findByIdAndUpdate(
+            id,
+            { $set: req.body },
+            { new: true }
+        );
+        
+        if (!updatedPet) {
+            return res.status(404).json({ message: 'Pet not found' });
+        }
+        
+        res.status(200).json(updatedPet);
+    } catch (error) {
+        console.error('Error updating pet:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+/**
+ * @route DELETE /api/pets/:id
+ * @desc Delete a pet
+ * @access Private/Admin
+ */
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid pet ID format' });
+        }
+        
+        const deletedPet = await Pet.findByIdAndDelete(id);
+        
+        if (!deletedPet) {
+            return res.status(404).json({ message: 'Pet not found' });
+        }
+        
+        res.status(200).json({ message: 'Pet removed successfully' });
+    } catch (error) {
+        console.error('Error deleting pet:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

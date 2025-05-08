@@ -4,6 +4,9 @@ const User = require('../Models/User');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { protect } = require('../middleware/auth');
+const { sendVerificationEmail, sendWelcomeEmail } = require('../utils/emailService');
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 
 /**
  * @route POST /api/auth/register
@@ -28,6 +31,9 @@ router.post('/register', async (req, res) => {
       password
     });
     
+    // Generate verification token using the User model method
+    const verificationToken = user.generateVerificationToken();
+    
     const createdUser = await user.save();
     
     // Generate token
@@ -36,6 +42,24 @@ router.post('/register', async (req, res) => {
       config.JWT_SECRET,
       { expiresIn: config.JWT_EXPIRE || '1h' }
     );
+    
+    // Try to send verification email
+    try {
+      await sendVerificationEmail(email, name, verificationToken);
+      console.log(`Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error('Error sending verification email:', emailError);
+      // Continue with registration even if email fails
+    }
+    
+    // Send welcome email
+    try {
+      await sendWelcomeEmail(email, name);
+      console.log(`Welcome email sent to ${email}`);
+    } catch (emailError) {
+      console.error('Error sending welcome email:', emailError);
+      // Continue with registration even if email fails
+    }
     
     res.status(201).json({
       _id: createdUser._id,
@@ -71,6 +95,11 @@ router.post('/login', async (req, res) => {
     
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+    
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return res.status(401).json({ message: 'Please verify your email before logging in. Check your inbox for a verification link.' });
     }
     
     // Update last login
@@ -163,6 +192,48 @@ router.put('/profile', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating user profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * @route POST /api/auth/verify-email
+ * @desc Verify user email
+ * @access Public
+ */
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ message: 'Verification token is required' });
+    }
+    
+    // Hash the token to match how it's stored in the database
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Find user with matching token and token not expired
+    const user = await User.findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: { $gt: Date.now() }
+    });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
+    }
+    
+    // Mark email as verified and clear token
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save();
+    
+    res.status(200).json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Error verifying email:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 const config = require('./config');
 const { initializeDatabase } = require('./utils/dbHelper');
 
@@ -11,6 +12,11 @@ const breedRoutes = require('./Controllers/breeds');
 const productRoutes = require('./Controllers/products');
 const orderRoutes = require('./Controllers/orders');
 const authRoutes = require('./Controllers/auth');
+const userRoutes = require('./Controllers/users');
+const bookingRoutes = require('./Controllers/bookings');
+const reviewRoutes = require('./Controllers/reviews');
+const searchRoutes = require('./Controllers/search');
+const emailRoutes = require('./Controllers/email');
 
 const app = express();
 
@@ -18,12 +24,20 @@ app.use(bodyParser.json({ limit: "30mb", extended: true }));
 app.use(bodyParser.urlencoded({ limit: "30mb", extended: true }));
 app.use(cors());
 
+// Serve static files
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
+
 // Use routes
 app.use('/api/pets', petRoutes);
 app.use('/api/breeds', breedRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/email', emailRoutes);
 
 // Base route for API status
 app.get('/api', (req, res) => {

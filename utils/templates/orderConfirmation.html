@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation - Pawvot</title>
+    <style>
+        /* Base styles */
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        
+        /* Container */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Header */
+        .header {
+            background-color: #FF6B6B;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        /* Logo */
+        .logo {
+            max-width: 120px;
+            margin-bottom: 20px;
+        }
+        
+        /* Content */
+        .content {
+            padding: 30px;
+        }
+        
+        /* Order number */
+        .order-number {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        /* Section */
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 1px solid #eeeeee;
+            padding-bottom: 10px;
+        }
+        
+        /* Items */
+        .items {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .items th {
+            background-color: #f5f5f5;
+            text-align: left;
+            padding: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .items td {
+            padding: 10px;
+            border-bottom: 1px solid #eeeeee;
+        }
+        
+        .item-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        /* Summary */
+        .summary {
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        .summary td {
+            padding: 5px 0;
+        }
+        
+        .summary .total {
+            font-weight: 700;
+            color: #FF6B6B;
+            font-size: 18px;
+        }
+        
+        .summary .label {
+            text-align: right;
+        }
+        
+        .summary .value {
+            text-align: right;
+            padding-left: 20px;
+        }
+        
+        /* Button */
+        .button {
+            display: inline-block;
+            background-color: #FF6B6B;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        
+        /* Footer */
+        .footer {
+            background-color: #f5f5f5;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .social-icons {
+            margin-top: 15px;
+        }
+        
+        .social-icons a {
+            display: inline-block;
+            margin: 0 5px;
+        }
+        
+        /* Responsive */
+        @media screen and (max-width: 600px) {
+            .container {
+                width: 100%;
+                border-radius: 0;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="../templates/pawvot.png" alt="Pawvot Logo" class="logo">
+            <h1>Order Confirmation</h1>
+        </div>
+        
+        <div class="content">
+            <p>Hi {{customerName}},</p>
+            <p>Thank you for your order! We're getting everything ready and will notify you once your items are on their way.</p>
+            
+            <div class="order-number">
+                <strong>Order #:</strong> {{orderId}}
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Items Ordered</div>
+                <table class="items">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;"></th>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th style="text-align: right;">Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each items}}
+                        <tr>
+                            <td>
+                                <img src="{{this.image}}" alt="{{this.name}}" class="item-image">
+                            </td>
+                            <td>{{this.name}}</td>
+                            <td>{{this.quantity}}</td>
+                            <td style="text-align: right;">${{this.totalPrice}}</td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+                
+                <table class="summary">
+                    <tr>
+                        <td></td>
+                        <td class="label">Subtotal:</td>
+                        <td class="value">${{subtotal}}</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td class="label">Shipping:</td>
+                        <td class="value">{{#if freeShipping}}Free{{else}}${{shippingCost}}{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td class="label">Tax:</td>
+                        <td class="value">${{tax}}</td>
+                    </tr>
+                    <tr class="total">
+                        <td></td>
+                        <td class="label">Total:</td>
+                        <td class="value">${{total}}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Shipping Address</div>
+                <p>
+                    {{shippingAddress.firstName}} {{shippingAddress.lastName}}<br>
+                    {{shippingAddress.address}}<br>
+                    {{shippingAddress.city}}, {{shippingAddress.state}} {{shippingAddress.postalCode}}<br>
+                    {{shippingAddress.country}}
+                </p>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Payment Information</div>
+                <p>
+                    <strong>Method:</strong> {{paymentMethod}}<br>
+                    <strong>Status:</strong> {{paymentStatus}}
+                </p>
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="{{orderUrl}}" class="button">View Order Details</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>If you have any questions or concerns about your order, please contact our customer support team at <a href="mailto:support@pawvot.com">support@pawvot.com</a>.</p>
+            
+            <p>&copy; {{currentYear}} PawVot. All rights reserved.</p>
+            
+            <div class="social-icons">
+                <a href="#"><img
+                        src="../templates/facebook.png"
+                        alt="Facebook"></a>
+                <a href="#"><img
+                        src="../templates/instagram.png"
+                        alt="Instagram"></a>
+                <a href="#"><img
+                        src="../templates/tik-tok.png"
+                        alt="TikTok"></a>
+                <a href="#"><img
+                        src="../templates/twitter.png"
+                        alt="Twitter"></a>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

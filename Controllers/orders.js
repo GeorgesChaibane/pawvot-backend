@@ -4,6 +4,8 @@ const Order = require('../Models/Order');
 const Product = require('../Models/Product');
 const mongoose = require('mongoose');
 const { protect, admin } = require('../middleware/auth');
+const { sendOrderConfirmationEmail } = require('../utils/emailService');
+const User = require('../Models/User');
 
 /**
  * @route POST /api/orders
@@ -13,20 +15,46 @@ const { protect, admin } = require('../middleware/auth');
 router.post('/', protect, async (req, res) => {
   try {
     const { 
-      orderItems, 
+      items,
       shippingAddress, 
       paymentMethod
     } = req.body;
 
     // Validate input
-    if (!orderItems || orderItems.length === 0) {
+    if (!items || items.length === 0) {
       return res.status(400).json({ message: 'No order items' });
     }
+
+    // Process order items and verify products exist
+    const orderItems = await Promise.all(items.map(async (item) => {
+      try {
+        // Verify that the product exists
+        const product = await Product.findById(item.product);
+        if (!product) {
+          throw new Error(`Product not found: ${item.product}`);
+        }
+
+        // Verify stock availability
+        if (product.countInStock < item.quantity) {
+          throw new Error(`Insufficient stock for product: ${product.name}`);
+        }
+
+        // Return the order item with product price
+        return {
+          product: item.product,
+          quantity: item.quantity,
+          price: product.price
+        };
+      } catch (error) {
+        console.error(`Error processing order item ${item.product}:`, error);
+        throw error;
+      }
+    }));
 
     // Create new order
     const order = new Order({
       user: req.user._id,
-      orderItems,
+      items: orderItems,
       shippingAddress,
       paymentMethod
     });
@@ -35,12 +63,45 @@ router.post('/', protect, async (req, res) => {
     const createdOrder = await order.save();
     
     // Update product inventory
-    await createdOrder.updateInventory();
+    await Promise.all(orderItems.map(async (item) => {
+      try {
+        const product = await Product.findById(item.product);
+        if (product) {
+          product.countInStock = Math.max(0, product.countInStock - item.quantity);
+          await product.save();
+        }
+      } catch (err) {
+        console.error(`Error updating inventory for product ${item.product}:`, err);
+      }
+    }));
     
-    res.status(201).json(createdOrder);
+    // Populate product details for the response
+    const populatedOrder = await Order.findById(createdOrder._id)
+      .populate({
+        path: 'items.product',
+        select: 'name images category'
+      });
+    
+    // Send confirmation email
+    try {
+      const user = await User.findById(req.user._id);
+      if (user && user.email) {
+        await sendOrderConfirmationEmail(
+          user.email, 
+          user.name || 'Valued Customer', 
+          populatedOrder
+        );
+        console.log(`Order confirmation email sent to ${user.email}`);
+      }
+    } catch (emailError) {
+      // Don't fail the order creation if email fails
+      console.error('Error sending order confirmation email:', emailError);
+    }
+    
+    res.status(201).json(populatedOrder);
   } catch (error) {
     console.error('Error creating order:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 });
 
@@ -51,7 +112,12 @@ router.post('/', protect, async (req, res) => {
  */
 router.get('/:id', protect, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate('user', 'name email');
+    const order = await Order.findById(req.params.id)
+      .populate('user', 'name email')
+      .populate({
+        path: 'items.product',
+        select: 'name images category'
+      });
     
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -81,7 +147,13 @@ router.get('/:id', protect, async (req, res) => {
  */
 router.get('/', protect, async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+    const orders = await Order.find({ user: req.user._id })
+      .populate({
+        path: 'items.product',
+        select: 'name images'
+      })
+      .sort({ createdAt: -1 });
+    
     res.status(200).json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
@@ -97,7 +169,11 @@ router.get('/', protect, async (req, res) => {
 router.get('/admin/all', protect, admin, async (req, res) => {
   try {
     const orders = await Order.find({})
-      .populate('user', 'id name email')
+      .populate('user', 'name email')
+      .populate({
+        path: 'items.product',
+        select: 'name images'
+      })
       .sort({ createdAt: -1 });
       
     res.status(200).json(orders);
@@ -125,14 +201,55 @@ router.put('/:id/pay', protect, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
     
+    // Handle cash on delivery - no payment result needed
+    if (req.body.paymentMethod === 'cash-on-delivery') {
+      order.paymentMethod = 'cash-on-delivery';
+      order.status = 'processing';
+      
+      const updatedOrder = await order.save();
+      
+      const populatedOrder = await Order.findById(updatedOrder._id)
+        .populate('user', 'name email')
+        .populate({
+          path: 'items.product',
+          select: 'name images'
+        });
+      
+      return res.status(200).json(populatedOrder);
+    }
+    
+    // Regular payment processing
     const { paymentResult } = req.body;
     
     if (!paymentResult) {
-      return res.status(400).json({ message: 'Payment result is required' });
+      return res.status(400).json({ message: 'Payment result is required for credit card payments' });
     }
     
     const updatedOrder = await order.markAsPaid(paymentResult);
-    res.status(200).json(updatedOrder);
+    
+    const populatedOrder = await Order.findById(updatedOrder._id)
+      .populate('user', 'name email')
+      .populate({
+        path: 'items.product',
+        select: 'name images'
+      });
+    
+    // Send payment confirmation email
+    try {
+      const user = await User.findById(req.user._id);
+      if (user && user.email) {
+        await sendOrderConfirmationEmail(
+          user.email, 
+          user.name || 'Valued Customer', 
+          populatedOrder
+        );
+        console.log(`Payment confirmation email sent to ${user.email}`);
+      }
+    } catch (emailError) {
+      console.error('Error sending payment confirmation email:', emailError);
+    }
+    
+    res.status(200).json(populatedOrder);
   } catch (error) {
     console.error('Error updating order payment:', error);
     res.status(500).json({ message: 'Server error' });
@@ -152,22 +269,22 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
     
-    const { status, trackingNumber } = req.body;
+    const { status } = req.body;
     
     if (!status) {
       return res.status(400).json({ message: 'Status is required' });
     }
     
-    if (status === 'Shipped' && !trackingNumber) {
-      return res.status(400).json({ message: 'Tracking number is required for shipped orders' });
-    }
-    
-    if (trackingNumber) {
-      order.trackingNumber = trackingNumber;
-    }
-    
     const updatedOrder = await order.updateOrderStatus(status);
-    res.status(200).json(updatedOrder);
+    
+    const populatedOrder = await Order.findById(updatedOrder._id)
+      .populate('user', 'name email')
+      .populate({
+        path: 'items.product',
+        select: 'name images'
+      });
+    
+    res.status(200).json(populatedOrder);
   } catch (error) {
     console.error('Error updating order status:', error);
     res.status(500).json({ message: 'Server error' });
@@ -198,7 +315,15 @@ router.put('/:id/cancel', protect, async (req, res) => {
     }
     
     const cancelledOrder = await order.cancelOrder();
-    res.status(200).json(cancelledOrder);
+    
+    const populatedOrder = await Order.findById(cancelledOrder._id)
+      .populate('user', 'name email')
+      .populate({
+        path: 'items.product',
+        select: 'name images'
+      });
+    
+    res.status(200).json(populatedOrder);
   } catch (error) {
     console.error('Error cancelling order:', error);
     res.status(500).json({ message: 'Server error' });

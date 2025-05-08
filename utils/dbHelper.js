@@ -6,6 +6,8 @@ const config = require('../config');
 const mongoose = require('mongoose');
 const Product = require('../Models/Product');
 const Order = require('../Models/Order');
+const { seedProducts } = require('./productSeeder');
+const { copyProductImages } = require('./copyImages');
 
 /**
  * Initialize database with pets and breeds
@@ -13,9 +15,15 @@ const Order = require('../Models/Order');
 const initializeDatabase = async () => {
     try {
         console.log('Initializing database...');
+        
+        // Copy product images from client to server public folder
+        await copyProductImages();
+        
+        // Sync data from APIs and seed database
         await syncBreeds();
         await syncPets();
         await ensureProductsExist();
+        
         console.log('Database initialization complete!');
     } catch (error) {
         console.error('Error initializing database:', error);
@@ -186,91 +194,37 @@ const ensureProductsExist = async () => {
         console.log(`Found ${productCount} existing products`);
         
         if (productCount === 0) {
-            console.log('Creating sample products...');
-            await createSampleProducts();
-            console.log('Sample products created');
+            console.log('No products found. Seeding product data...');
+            
+            // Instead of using sample products, use the product seeder
+            // that includes our product data with proper image paths
+            const { seedProducts } = require('./productSeeder');
+            
+            // Call the seedProducts function but don't disconnect from MongoDB
+            // since we're in the middle of initializing the database
+            try {
+                // Delete any existing products (just to be safe)
+                await Product.deleteMany({});
+                
+                // Get the seed data without connecting/disconnecting
+                const { productSeedData } = require('./productSeeder');
+                
+                // Insert the seed data
+                await Product.insertMany(productSeedData);
+                console.log(`${productSeedData.length} products seeded successfully`);
+            } catch (error) {
+                console.error('Error seeding products:', error);
+            }
         }
     } catch (error) {
         console.error('Error checking products:', error);
     }
 };
 
-/**
- * Create sample products for testing
- */
-const createSampleProducts = async () => {
-    const sampleProducts = [
-        {
-            name: 'Premium Dog Food',
-            description: 'High quality dog food with balanced nutrition for all breeds.',
-            price: 49.99,
-            images: ['dog-food.jpg'],
-            category: 'food',
-            petType: ['dog'],
-            brand: 'Happy Paws',
-            countInStock: 50,
-            featured: true
-        },
-        {
-            name: 'Cat Scratching Post',
-            description: 'Sturdy cat scratching post with sisal rope and comfortable perch.',
-            price: 29.99,
-            images: ['cat-post.jpg'],
-            category: 'accessories',
-            petType: ['cat'],
-            brand: 'Feline Fun',
-            countInStock: 30,
-            featured: true
-        },
-        {
-            name: 'Dog Chew Toy',
-            description: 'Durable chew toy for dogs that helps clean teeth and gums.',
-            price: 12.99,
-            images: ['dog-toy.jpg'],
-            category: 'toys',
-            petType: ['dog'],
-            brand: 'Pup Play',
-            countInStock: 100,
-            featured: false
-        },
-        {
-            name: 'Cat Litter Box',
-            description: 'Enclosed litter box with odor control and easy cleaning access.',
-            price: 39.99,
-            images: ['litter-box.jpg'],
-            category: 'litter',
-            petType: ['cat'],
-            brand: 'Feline Fun',
-            countInStock: 25,
-            featured: false
-        },
-        {
-            name: 'Pet Shampoo',
-            description: 'Gentle pet shampoo for dogs and cats with sensitive skin.',
-            price: 14.99,
-            images: ['pet-shampoo.jpg'],
-            category: 'grooming',
-            petType: ['dog', 'cat'],
-            brand: 'Pet Care',
-            countInStock: 75,
-            featured: true
-        },
-        {
-            name: 'Pet Carrier',
-            description: 'Comfortable and secure pet carrier for travel.',
-            price: 59.99,
-            images: ['pet-carrier.jpg'],
-            category: 'carriers',
-            petType: ['dog', 'cat', 'small_pet'],
-            brand: 'Travel Pets',
-            countInStock: 20,
-            featured: false
-        }
-    ];
-    
-    await Product.insertMany(sampleProducts);
-};
-
+// Export the functions
 module.exports = {
-    initializeDatabase
+    initializeDatabase,
+    syncBreeds,
+    syncPets,
+    ensureProductsExist
 }; 

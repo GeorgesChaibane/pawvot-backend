@@ -1,13 +1,49 @@
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const handlebars = require('handlebars');
+const fs = require('fs-extra');
+const path = require('path');
 
+// Create transporter with updated configuration for better Gmail SMTP compatibility
 const transporter = nodemailer.createTransport({
-    service: config.EMAIL_SERVICE,
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // use STARTTLS
     auth: {
         user: config.EMAIL_USERNAME,
         pass: config.EMAIL_PASSWORD
+    },
+    tls: {
+        rejectUnauthorized: false // don't fail on invalid certs
     }
 });
+
+// Verify transporter configuration at startup
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('SMTP server connection error:', error);
+    } else {
+        console.log('SMTP server connection established successfully');
+    }
+});
+
+/**
+ * Compile a handlebars template with provided data
+ * @param {string} templateName - Name of the template file (without extension)
+ * @param {Object} data - Data to use when compiling the template
+ * @returns {Promise<string>} - The compiled HTML
+ */
+const compileTemplate = async (templateName, data) => {
+    try {
+        const templatePath = path.join(__dirname, 'templates', `${templateName}.html`);
+        const source = await fs.readFile(templatePath, 'utf8');
+        const template = handlebars.compile(source);
+        return template(data);
+    } catch (error) {
+        console.error(`Error compiling template ${templateName}:`, error);
+        throw error;
+    }
+};
 
 /**
  * Send an email
@@ -19,8 +55,15 @@ const transporter = nodemailer.createTransport({
  * @returns {Promise} - Resolves with info about the sent email
  */
 const sendEmail = async (options) => {
+    // Skip sending emails if credentials are missing
+    if (!config.EMAIL_USERNAME || !config.EMAIL_PASSWORD) {
+        console.log('Email sending skipped: Missing email credentials');
+        console.log('Please check your .env file and make sure EMAIL_USERNAME and EMAIL_PASSWORD are set');
+        return null;
+    }
+    
     const message = {
-        from: `Pawvot <${config.EMAIL_FROM}>`,
+        from: `Pawvot-noreply <${config.EMAIL_FROM || config.EMAIL_USERNAME}>`,
         to: options.to,
         subject: options.subject,
         text: options.text,
@@ -28,12 +71,34 @@ const sendEmail = async (options) => {
     };
 
     try {
+        console.log('Attempting to send email with the following configuration:');
+        console.log(`- SMTP Host: ${transporter.options.host}`);
+        console.log(`- SMTP Port: ${transporter.options.port}`);
+        console.log(`- From: ${message.from}`);
+        console.log(`- To: ${message.to}`);
+        console.log(`- Subject: ${message.subject}`);
+        
         const info = await transporter.sendMail(message);
         console.log('Email sent: ', info.messageId);
+        if (info.messageUrl) {
+            console.log('Preview URL: %s', info.messageUrl);
+        }
         return info;
     } catch (error) {
-        console.error('Error sending email:', error);
-        throw error;
+        console.error('Error sending email:');
+        console.error(`- Error name: ${error.name}`);
+        console.error(`- Error message: ${error.message}`);
+        
+        if (error.code === 'EAUTH') {
+            console.error('Authentication error - check your email username and password');
+        } else if (error.code === 'ESOCKET') {
+            console.error('Socket error - check your network connectivity and firewall settings');
+        } else if (error.code === 'ECONNECTION') {
+            console.error('Connection error - check that your SMTP host and port are correct');
+        }
+        
+        // Just log the error but don't throw it, to prevent disrupting app flow
+        return null;
     }
 };
 
@@ -44,35 +109,33 @@ const sendEmail = async (options) => {
  * @param {string} token - Verification token
  */
 const sendVerificationEmail = async (email, name, token) => {
-    const verificationLink = `${config.CLIENT_URL}/verify-email?token=${token}`;
-    
-    const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #e63946;">Welcome to Pawvot!</h1>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <p>Hi ${name},</p>
-            <p>Thank you for registering with Pawvot! We're excited to have you join our community of pet lovers.</p>
-            <p>Please verify your email address by clicking the button below:</p>
-        </div>
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="${verificationLink}" style="background-color: #e63946; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Verify Email Address</a>
-        </div>
-        <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px; color: #666; font-size: 14px;">
-            <p>If you didn't create an account with us, please ignore this email.</p>
-            <p>This link will expire in 24 hours.</p>
-            <p>If the button doesn't work, you can copy and paste the following link into your browser: ${verificationLink}</p>
-        </div>
-    </div>
-    `;
-    
-    return sendEmail({
-        to: email,
-        subject: 'Verify Your Email | Pawvot',
-        text: `Hi ${name}, Please verify your email address by clicking the following link: ${verificationLink}`,
-        html
-    });
+    try {
+        const serverUrl = 'http://localhost:5000';
+        const verificationLink = `http://localhost:3000/verify-email?token=${token}`;
+        
+        // Compile the email verification template
+        const html = await compileTemplate('emailVerification', {
+            name,
+            verificationLink,
+            logoUrl: `${serverUrl}/images/pawvot.png`,
+            facebookUrl: `${serverUrl}/images/facebook.png`,
+            twitterUrl: `${serverUrl}/images/twitter.png`,
+            instagramUrl: `${serverUrl}/images/instagram.png`,
+            tiktokUrl: `${serverUrl}/images/tik-tok.png`,
+            year: new Date().getFullYear()
+        });
+        
+        return sendEmail({
+            to: email,
+            subject: 'Verify Your Email | Pawvot',
+            text: `Hi ${name}, Please verify your email address by clicking the following link: ${verificationLink}`,
+            html
+        });
+    } catch (error) {
+        console.error('Error sending verification email:', error);
+        // Don't throw the error to prevent disrupting registration flow
+        return null;
+    }
 };
 
 /**
@@ -82,35 +145,28 @@ const sendVerificationEmail = async (email, name, token) => {
  * @param {string} token - Reset token
  */
 const sendPasswordResetEmail = async (email, name, token) => {
-    const resetLink = `${config.CLIENT_URL}/reset-password?token=${token}`;
-    
-    const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #e63946;">Reset Your Password</h1>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <p>Hi ${name},</p>
-            <p>We received a request to reset your password for your Pawvot account.</p>
-            <p>Please click the button below to reset your password:</p>
-        </div>
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #e63946; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
-        </div>
-        <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px; color: #666; font-size: 14px;">
-            <p>If you didn't request this, please ignore this email.</p>
-            <p>This link will expire in 1 hour.</p>
-            <p>If the button doesn't work, you can copy and paste the following link into your browser: ${resetLink}</p>
-        </div>
-    </div>
-    `;
-    
-    return sendEmail({
-        to: email,
-        subject: 'Reset Your Password | Pawvot',
-        text: `Hi ${name}, Please reset your password by clicking the following link: ${resetLink}`,
-        html
-    });
+    try {
+        const resetLink = `${config.CLIENT_URL}/reset-password?token=${token}`;
+        
+        // Compile the password reset template
+        const html = await compileTemplate('passwordReset', {
+            name,
+            resetLink,
+            logoUrl: `${config.CLIENT_URL}/logo.png`,
+            year: new Date().getFullYear()
+        });
+        
+        return sendEmail({
+            to: email,
+            subject: 'Reset Your Password | Pawvot',
+            text: `Hi ${name}, Please reset your password by clicking the following link: ${resetLink}`,
+            html
+        });
+    } catch (error) {
+        console.error('Error sending password reset email:', error);
+        // Don't throw the error
+        return null;
+    }
 };
 
 /**
@@ -120,88 +176,55 @@ const sendPasswordResetEmail = async (email, name, token) => {
  * @param {Object} order - Order details
  */
 const sendOrderConfirmationEmail = async (email, name, order) => {
-    const orderLink = `${config.CLIENT_URL}/orders/${order._id}`;
-    
-    // Generate order items HTML
-    let itemsHtml = '';
-    order.orderItems.forEach(item => {
-        itemsHtml += `
-        <tr>
-            <td style="padding: 10px; border-bottom: 1px solid #ddd;">
-                <img src="${item.image}" alt="${item.name}" style="width: 50px; height: 50px; object-fit: cover;">
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #ddd;">${item.name}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #ddd;">${item.quantity}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #ddd;">$${item.price.toFixed(2)}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #ddd;">$${(item.price * item.quantity).toFixed(2)}</td>
-        </tr>
-        `;
-    });
-    
-    const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #e63946;">Order Confirmation</h1>
-            <p style="color: #666;">Order #${order._id}</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <p>Hi ${name},</p>
-            <p>Thank you for your order! We're processing it now and will ship your items soon.</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #333;">Order Summary</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="background-color: #f5f5f5;">
-                        <th style="padding: 10px; text-align: left;">Item</th>
-                        <th style="padding: 10px; text-align: left;">Name</th>
-                        <th style="padding: 10px; text-align: left;">Qty</th>
-                        <th style="padding: 10px; text-align: left;">Price</th>
-                        <th style="padding: 10px; text-align: left;">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itemsHtml}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="4" style="padding: 10px; text-align: right; font-weight: bold;">Subtotal:</td>
-                        <td style="padding: 10px;">$${order.subtotal.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="4" style="padding: 10px; text-align: right; font-weight: bold;">Shipping:</td>
-                        <td style="padding: 10px;">$${order.shippingPrice.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="4" style="padding: 10px; text-align: right; font-weight: bold;">Total:</td>
-                        <td style="padding: 10px; font-weight: bold;">$${order.totalPrice.toFixed(2)}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #333;">Shipping Information</h3>
-            <p><strong>Name:</strong> ${order.shippingAddress.fullName}</p>
-            <p><strong>Address:</strong> ${order.shippingAddress.address}</p>
-            <p><strong>City:</strong> ${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.zipCode}</p>
-            <p><strong>Phone:</strong> ${order.shippingAddress.phoneNumber}</p>
-        </div>
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="${orderLink}" style="background-color: #e63946; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Order</a>
-        </div>
-        <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px; color: #666; font-size: 14px; text-align: center;">
-            <p>Thank you for shopping with Pawvot!</p>
-            <p>If you have any questions, please contact our customer service at support@pawvot.com</p>
-        </div>
-    </div>
-    `;
-    
-    return sendEmail({
-        to: email,
-        subject: `Order Confirmation #${order._id} | Pawvot`,
-        text: `Hi ${name}, Thank you for your order! Your order #${order._id} has been received and is being processed.`,
-        html
-    });
+    try {
+        // Handle MongoDB ObjectId
+        const orderId = order._id.toString ? order._id.toString() : String(order._id);
+        const orderUrl = `${config.CLIENT_URL}/orders/${orderId}`;
+        
+        // Format order items for the template
+        const formattedItems = order.items.map(item => ({
+            name: item.product?.name || 'Product',
+            quantity: item.quantity,
+            price: item.price?.toFixed(2) || '0.00',
+            totalPrice: (item.price * item.quantity).toFixed(2) || '0.00',
+            image: item.product?.images?.[0] || 'https://via.placeholder.com/60x60?text=Product'
+        }));
+        
+        // Calculate free shipping
+        const freeShipping = order.shippingCost === 0;
+        
+        // Prepare template data
+        const templateData = {
+            customerName: name,
+            orderId: orderId.substring(0, 8), // Use first 8 chars of ID for display
+            items: formattedItems,
+            subtotal: order.subtotal?.toFixed(2) || '0.00',
+            tax: order.tax?.toFixed(2) || '0.00',
+            shippingCost: order.shippingCost?.toFixed(2) || '0.00',
+            total: order.totalPrice?.toFixed(2) || '0.00',
+            freeShipping,
+            shippingAddress: order.shippingAddress,
+            paymentMethod: order.paymentMethod === 'credit-card' ? 'Credit Card' : 'Cash on Delivery',
+            paymentStatus: order.isPaid ? 'Paid' : 'Pending',
+            orderUrl,
+            logoUrl: `${config.CLIENT_URL}/logo.png`,
+            currentYear: new Date().getFullYear()
+        };
+        
+        // Compile the order confirmation template
+        const html = await compileTemplate('orderConfirmation', templateData);
+        
+        return sendEmail({
+            to: email,
+            subject: `Order Confirmation #${orderId.substring(0, 8)} | Pawvot`,
+            text: `Hi ${name}, Thank you for your order! Your order #${orderId.substring(0, 8)} has been received and is being processed.`,
+            html
+        });
+    } catch (error) {
+        console.error('Error sending order confirmation email:', error);
+        // Don't throw the error
+        return null;
+    }
 };
 
 /**
@@ -212,54 +235,117 @@ const sendOrderConfirmationEmail = async (email, name, order) => {
  * @param {Object} pet - Pet details
  */
 const sendBookingConfirmationEmail = async (email, name, booking, pet) => {
-    const bookingDate = new Date(booking.visitDate).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-    
-    const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #e63946;">Booking Confirmation</h1>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <p>Hi ${name},</p>
-            <p>Your visit with ${pet.name} has been scheduled! We're looking forward to meeting you.</p>
-        </div>
-        <div style="margin-bottom: 20px; background-color: #f9f9f9; padding: 20px; border-radius: 10px;">
-            <h3 style="color: #333; margin-top: 0;">Visit Details</h3>
-            <p><strong>Pet:</strong> ${pet.name} (${pet.breed})</p>
-            <p><strong>Date:</strong> ${bookingDate}</p>
-            <p><strong>Time:</strong> ${booking.visitTime}</p>
-            <p><strong>Location:</strong> Pawvot Adoption Center - ${pet.location} Branch</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #333;">What to Expect</h3>
-            <p>During your visit, you'll have the opportunity to meet ${pet.name} and interact with them in a comfortable environment. Our staff will be available to answer any questions you may have about adoption, pet care, and ${pet.name}'s specific needs.</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="color: #333;">Before Your Visit</h3>
-            <ul>
-                <li>Arrive 10-15 minutes before your scheduled time</li>
-                <li>Bring a valid ID</li>
-                <li>Consider bringing family members who will be living with the pet</li>
-            </ul>
-        </div>
-        <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px; color: #666; font-size: 14px; text-align: center;">
-            <p>If you need to reschedule or cancel your visit, please contact us at least 24 hours in advance.</p>
-            <p>For any questions, please reach out to us at support@pawvot.com</p>
-        </div>
-    </div>
-    `;
-    
-    return sendEmail({
-        to: email,
-        subject: `Booking Confirmation: Visit with ${pet.name} | Pawvot`,
-        text: `Hi ${name}, Your visit with ${pet.name} has been scheduled for ${bookingDate} at ${booking.visitTime}. We're looking forward to meeting you!`,
-        html
-    });
+    try {
+        const bookingId = booking._id.toString ? booking._id.toString() : String(booking._id);
+        const bookingDate = new Date(booking.visitDate).toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        // Prepare template data
+        const templateData = {
+            customerName: name,
+            petName: pet.name,
+            petBreed: pet.breed,
+            bookingDate,
+            visitTime: booking.visitTime,
+            location: pet.location,
+            bookingId: bookingId,
+            logoUrl: `${config.CLIENT_URL}/logo.png`,
+            currentYear: new Date().getFullYear()
+        };
+        
+        // Compile the booking confirmation template
+        const html = await compileTemplate('bookingConfirmation', templateData);
+        
+        return sendEmail({
+            to: email,
+            subject: `Booking Confirmation - ${pet.name} | Pawvot`,
+            text: `Hi ${name}, Your visit with ${pet.name} has been scheduled for ${bookingDate} at ${booking.visitTime}.`,
+            html
+        });
+    } catch (error) {
+        console.error('Error sending booking confirmation email:', error);
+        // Don't throw the error
+        return null;
+    }
+};
+
+/**
+ * Send welcome email to new user
+ * @param {string} email - User's email
+ * @param {string} name - User's name
+ */
+const sendWelcomeEmail = async (email, name) => {
+    try {
+        // Prepare template data
+        const templateData = {
+            customerName: name,
+            loginUrl: `${config.CLIENT_URL}/login`,
+            exploreProductsUrl: `${config.CLIENT_URL}/products`,
+            explorePetsUrl: `${config.CLIENT_URL}/pets`,
+            logoUrl: `${config.CLIENT_URL}/logo.png`,
+            currentYear: new Date().getFullYear()
+        };
+        
+        // Try to compile the welcome template if it exists
+        let html;
+        try {
+            html = await compileTemplate('welcomeEmail', templateData);
+        } catch (err) {
+            // If template doesn't exist, use a simple HTML email
+            html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f0f0f0; border-radius: 5px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="${config.CLIENT_URL}/logo.png" alt="Pawvot Logo" style="max-width: 150px;">
+                </div>
+                
+                <h1 style="color: #fe6f6f; text-align: center; margin-bottom: 20px;">Welcome to Pawvot!</h1>
+                
+                <p style="font-size: 16px; line-height: 1.5; color: #333;">Hello ${name},</p>
+                
+                <p style="font-size: 16px; line-height: 1.5; color: #333;">Thank you for joining the Pawvot family! We're thrilled to have you as part of our community of pet lovers.</p>
+                
+                <p style="font-size: 16px; line-height: 1.5; color: #333;">At Pawvot, you can:</p>
+                
+                <ul style="font-size: 16px; line-height: 1.5; color: #333; margin-bottom: 20px;">
+                    <li>Find your perfect furry companion</li>
+                    <li>Shop premium pet supplies and accessories</li>
+                    <li>Connect with other pet enthusiasts</li>
+                    <li>Learn about pet care and adoption</li>
+                </ul>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${config.CLIENT_URL}/products" style="background-color: #fe6f6f; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-right: 10px;">Explore Products</a>
+                    <a href="${config.CLIENT_URL}/pets" style="background-color: #4A90E2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Find Pets</a>
+                </div>
+                
+                <p style="font-size: 16px; line-height: 1.5; color: #333;">If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+                
+                <p style="font-size: 16px; line-height: 1.5; color: #333;">Wags and purrs,</p>
+                <p style="font-size: 16px; line-height: 1.5; color: #333; font-weight: bold;">The Pawvot Team</p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f0f0f0; text-align: center; color: #999; font-size: 12px;">
+                    <p>&copy; ${new Date().getFullYear()} Pawvot. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply to this email.</p>
+                </div>
+            </div>
+            `;
+        }
+        
+        return sendEmail({
+            to: email,
+            subject: 'Welcome to Pawvot!',
+            text: `Hi ${name}, Welcome to Pawvot! We're excited to have you join our community of pet lovers.`,
+            html
+        });
+    } catch (error) {
+        console.error('Error sending welcome email:', error);
+        // Don't throw the error to prevent disrupting registration flow
+        return null;
+    }
 };
 
 module.exports = {
@@ -267,5 +353,6 @@ module.exports = {
     sendVerificationEmail,
     sendPasswordResetEmail,
     sendOrderConfirmationEmail,
-    sendBookingConfirmationEmail
+    sendBookingConfirmationEmail,
+    sendWelcomeEmail
 }; 

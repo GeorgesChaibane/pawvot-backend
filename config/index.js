@@ -6,7 +6,7 @@ module.exports = {
     NODE_ENV: process.env.NODE_ENV || 'development',
     
     // MongoDB configuration
-    MONGO_URI: process.env.MONGO_URI || 'mongodb+srv://georgeschaiban71:uJziAZlj9P6Tjr4V@cluster0.de7deji.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+    MONGO_URI: process.env.MONGO_URI,
     
     // JWT configuration
     JWT_SECRET: process.env.JWT_SECRET || 'your_jwt_secret_key',
