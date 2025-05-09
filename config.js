@@ -3,7 +3,7 @@ require('dotenv').config();
 // Configuration for APIs and other environment variables
 module.exports = {
     // MongoDB connection string
-    MONGODB_URI: process.env.MONGODB_URI,
+    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/pawvot',
     
     // API Keys
     DOG_API_KEY: process.env.DOG_API_KEY,
@@ -14,8 +14,8 @@ module.exports = {
     CAT_API_ENDPOINT: 'https://api.thecatapi.com/v1',
     
     // JWT
-    JWT_SECRET: process.env.JWT_SECRET,
-    JWT_EXPIRE: process.env.JWT_EXPIRE,
+    JWT_SECRET: process.env.JWT_SECRET || 'pawvotsecret2023',
+    JWT_EXPIRE: process.env.JWT_EXPIRE || '7d',
     JWT_COOKIE_EXPIRE: process.env.JWT_COOKIE_EXPIRE,
     
     // Email
@@ -27,7 +27,7 @@ module.exports = {
     // Google OAuth
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-    GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL,
+    GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback',
     
     // Port for server
     PORT: process.env.PORT || 5000,
@@ -36,5 +36,8 @@ module.exports = {
     CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
     
     // Node environment
-    NODE_ENV: process.env.NODE_ENV || 'development'
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    
+    // URLs for server and client (used for image paths and links)
+    SERVER_URL: process.env.SERVER_URL || 'http://localhost:5000'
 }; 

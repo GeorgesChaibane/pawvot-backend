@@ -61,18 +61,19 @@ const ProductSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a category'],
     enum: [
-      'food',
-      'treats',
-      'toys',
-      'accessories',
-      'grooming',
-      'health',
-      'litter',
-      'beds',
-      'carriers',
-      'clothing',
-      'training',
-      'other'
+      'food', 'Food',
+      'treats', 'Treats',
+      'toys', 'Toys',
+      'accessories', 'Accessories',
+      'grooming', 'Grooming',
+      'health', 'Health',
+      'litter', 'Litter',
+      'beds', 'Beds',
+      'carriers', 'Carriers',
+      'clothing', 'Clothing',
+      'training', 'Training',
+      'medicines', 'Medicines',
+      'other', 'Other'
     ]
   },
   petType: {

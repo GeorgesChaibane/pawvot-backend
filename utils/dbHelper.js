@@ -17,7 +17,7 @@ const initializeDatabase = async () => {
         console.log('Initializing database...');
         
         // Copy product images from client to server public folder
-        await copyProductImages();
+        //await copyProductImages();
         
         // Sync data from APIs and seed database
         await syncBreeds();

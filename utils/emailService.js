@@ -110,18 +110,18 @@ const sendEmail = async (options) => {
  */
 const sendVerificationEmail = async (email, name, token) => {
     try {
-        const serverUrl = 'http://localhost:5000';
-        const verificationLink = `http://localhost:3000/verify-email?token=${token}`;
+        const serverUrl = config.SERVER_URL || 'http://localhost:5000';
+        const verificationLink = `${config.CLIENT_URL || 'http://localhost:3000'}/verify-email?token=${token}`;
         
-        // Compile the email verification template
+        // Compile the email verification template with absolute URLs for images
         const html = await compileTemplate('emailVerification', {
             name,
             verificationLink,
-            logoUrl: `${serverUrl}/images/pawvot.png`,
-            facebookUrl: `${serverUrl}/images/facebook.png`,
-            twitterUrl: `${serverUrl}/images/twitter.png`,
-            instagramUrl: `${serverUrl}/images/instagram.png`,
-            tiktokUrl: `${serverUrl}/images/tik-tok.png`,
+            logoUrl: `${serverUrl}/images/email-assets/pawvot-logo.png`,
+            facebookUrl: `${serverUrl}/images/email-assets/facebook.png`,
+            twitterUrl: `${serverUrl}/images/email-assets/twitter.png`,
+            instagramUrl: `${serverUrl}/images/email-assets/instagram.png`,
+            tiktokUrl: `${serverUrl}/images/email-assets/tiktok.png`,
             year: new Date().getFullYear()
         });
         
@@ -146,13 +146,18 @@ const sendVerificationEmail = async (email, name, token) => {
  */
 const sendPasswordResetEmail = async (email, name, token) => {
     try {
-        const resetLink = `${config.CLIENT_URL}/reset-password?token=${token}`;
+        const serverUrl = config.SERVER_URL || 'http://localhost:5000';
+        const resetLink = `${config.CLIENT_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
         
-        // Compile the password reset template
+        // Compile the password reset template with absolute URLs for images
         const html = await compileTemplate('passwordReset', {
             name,
             resetLink,
-            logoUrl: `${config.CLIENT_URL}/logo.png`,
+            logoUrl: `${serverUrl}/images/email-assets/pawvot-logo.png`,
+            facebookUrl: `${serverUrl}/images/email-assets/facebook.png`,
+            twitterUrl: `${serverUrl}/images/email-assets/twitter.png`,
+            instagramUrl: `${serverUrl}/images/email-assets/instagram.png`,
+            tiktokUrl: `${serverUrl}/images/email-assets/tiktok.png`,
             year: new Date().getFullYear()
         });
         
@@ -177,23 +182,32 @@ const sendPasswordResetEmail = async (email, name, token) => {
  */
 const sendOrderConfirmationEmail = async (email, name, order) => {
     try {
+        const serverUrl = config.SERVER_URL || 'http://localhost:5000';
         // Handle MongoDB ObjectId
         const orderId = order._id.toString ? order._id.toString() : String(order._id);
-        const orderUrl = `${config.CLIENT_URL}/orders/${orderId}`;
+        const orderUrl = `${config.CLIENT_URL || 'http://localhost:3000'}/orders/${orderId}`;
         
-        // Format order items for the template
-        const formattedItems = order.items.map(item => ({
-            name: item.product?.name || 'Product',
-            quantity: item.quantity,
-            price: item.price?.toFixed(2) || '0.00',
-            totalPrice: (item.price * item.quantity).toFixed(2) || '0.00',
-            image: item.product?.images?.[0] || 'https://via.placeholder.com/60x60?text=Product'
-        }));
+        // Format order items for the template with absolute image URLs
+        const formattedItems = order.items.map(item => {
+            // Get the product image and ensure it has a full URL
+            const imagePath = item.product?.images?.[0] || '';
+            const imageUrl = imagePath.startsWith('http') ? 
+                imagePath : 
+                `${serverUrl}/images/${imagePath}`;
+                
+            return {
+                name: item.product?.name || 'Product',
+                quantity: item.quantity,
+                price: item.price?.toFixed(2) || '0.00',
+                totalPrice: (item.price * item.quantity).toFixed(2) || '0.00',
+                image: imageUrl
+            };
+        });
         
         // Calculate free shipping
         const freeShipping = order.shippingCost === 0;
         
-        // Prepare template data
+        // Prepare template data with absolute image URLs
         const templateData = {
             customerName: name,
             orderId: orderId.substring(0, 8), // Use first 8 chars of ID for display
@@ -207,7 +221,11 @@ const sendOrderConfirmationEmail = async (email, name, order) => {
             paymentMethod: order.paymentMethod === 'credit-card' ? 'Credit Card' : 'Cash on Delivery',
             paymentStatus: order.isPaid ? 'Paid' : 'Pending',
             orderUrl,
-            logoUrl: `${config.CLIENT_URL}/logo.png`,
+            logoUrl: `${serverUrl}/images/email-assets/pawvot-logo.png`,
+            facebookUrl: `${serverUrl}/images/email-assets/facebook.png`,
+            twitterUrl: `${serverUrl}/images/email-assets/twitter.png`,
+            instagramUrl: `${serverUrl}/images/email-assets/instagram.png`,
+            tiktokUrl: `${serverUrl}/images/email-assets/tiktok.png`,
             currentYear: new Date().getFullYear()
         };
         

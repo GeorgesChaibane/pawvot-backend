@@ -78,6 +78,12 @@ reviewSchema.post('save', async function() {
     await this.constructor.calculateAverageRating(this.product);
 });
 
+// Use deleteOne instead of deprecated remove
+reviewSchema.post('deleteOne', { document: true, query: false }, async function() {
+    await this.constructor.calculateAverageRating(this.product);
+});
+
+// Keep the remove hook for backward compatibility 
 reviewSchema.post('remove', async function() {
     await this.constructor.calculateAverageRating(this.product);
 });

@@ -88,6 +88,11 @@
             margin: 0 5px;
         }
         
+        .social-icon {
+            width: 24px;
+            height: 24px;
+        }
+        
         /* Responsive */
         @media screen and (max-width: 600px) {
             .container {
@@ -104,7 +109,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="../client/build/pawvot.png" alt="Pawvot Logo" class="logo">
+            <img src="{{logoUrl}}" alt="Pawvot Logo" class="logo">
             <h1>Verify Your Email</h1>
         </div>
         
@@ -134,10 +139,10 @@
             <p>&copy; {{year}} Pawvot. All rights reserved.</p>
             
             <div class="social-icons">
-                <a href="#"><img src="../templates/facebook.png" alt="Facebook"></a>
-                <a href="#"><img src="../templates/instagram.png" alt="Instagram"></a>
-                <a href="#"><img src="../templates/tik-tok.png" alt="TikTok"></a>
-                <a href="#"><img src="../templates/twitter.png" alt="Twitter"></a>
+                <a href="#"><img src="{{facebookUrl}}" alt="Facebook" class="social-icon"></a>
+                <a href="#"><img src="{{instagramUrl}}" alt="Instagram" class="social-icon"></a>
+                <a href="#"><img src="{{tiktokUrl}}" alt="TikTok" class="social-icon"></a>
+                <a href="#"><img src="{{twitterUrl}}" alt="Twitter" class="social-icon"></a>
             </div>
         </div>
     </div>

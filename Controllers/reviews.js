@@ -4,6 +4,7 @@ const Review = require('../Models/Review');
 const Product = require('../Models/Product');
 const Order = require('../Models/Order');
 const { protect } = require('../middleware/auth');
+const mongoose = require('mongoose');
 
 /**
  * @route POST /api/reviews/product/:productId
@@ -166,7 +167,15 @@ router.put('/:reviewId', protect, async (req, res) => {
  */
 router.delete('/:reviewId', protect, async (req, res) => {
   try {
-    const review = await Review.findById(req.params.reviewId);
+    const reviewId = req.params.reviewId;
+    
+    // Check if reviewId is valid
+    if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({ message: 'Invalid review ID format' });
+    }
+    
+    // Find the review
+    const review = await Review.findById(reviewId);
     
     if (!review) {
       return res.status(404).json({ message: 'Review not found' });
@@ -180,12 +189,17 @@ router.delete('/:reviewId', protect, async (req, res) => {
     // Store product ID for recalculating rating after deletion
     const productId = review.product;
     
-    await review.remove();
+    // Use findByIdAndDelete instead of deleteOne
+    await Review.findByIdAndDelete(reviewId);
     
-    res.json({ message: 'Review removed' });
+    // Get the Review model and manually call the calculation method
+    const ReviewModel = mongoose.model('Review');
+    await ReviewModel.calculateAverageRating(productId);
+    
+    res.status(200).json({ message: 'Review removed' });
   } catch (error) {
     console.error('Error deleting review:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
