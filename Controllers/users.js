@@ -5,8 +5,6 @@ const Product = require('../Models/Product');
 const { protect, admin } = require('../middleware/auth');
 const mongoose = require('mongoose');
 
-// ... existing routes ...
-
 /**
  * @route GET /api/users/cart
  * @desc Get items in user's cart

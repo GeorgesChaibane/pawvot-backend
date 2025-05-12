@@ -63,6 +63,8 @@ function processSearchQuery(query) {
     petTypes: [],
     breeds: [],
     categories: [],
+    ageRange: { min: null, max: null },
+    gender: null,
     originalQuery: query
   };
 
@@ -80,51 +82,74 @@ function processSearchQuery(query) {
   const productCategories = ['food', 'toy', 'medicine', 'accessory', 'grooming', 'treats'];
   
   // Common locations in Lebanon
-  const locations = ['beirut', 'tripoli', 'sidon', 'tyre', 'jounieh', 'byblos', 'baalbek', 'zahle', 'aley', 'nabatieh', 'ashrafieh', 'dekwaneh'];
+  const locations = [
+    'beirut', 'tripoli', 'sidon', 'tyre', 'jounieh', 'byblos', 'baalbek', 
+    'zahle', 'aley', 'nabatieh', 'ashrafieh', 'dekwaneh', 'baabda'
+  ];
+  
+  // Gender terms
+  const maleTerms = ['male', 'boy'];
+  const femaleTerms = ['female', 'girl'];
+  
+  // Check for locations first - if the query is primarily a location, it's likely pet-related
+  for (const location of locations) {
+    if (query.toLowerCase().includes(location)) {
+      result.locations.push(location);
+      // Assume location searches are pet-related
+      result.isPetRelated = true;
+    }
+  }
+  
+  // If we found a location and nothing else in the query, prioritize location search
+  if (result.locations.length > 0 && query.trim().split(/\s+/).length <= 2) {
+    console.log(`Location-focused search detected: ${result.locations.join(', ')}`);
+    result.responseType = 'pets';
+    return result;
+  }
   
   // Check for pet-related terms
-  result.isPetRelated = petTerms.some(term => query.includes(term));
+  result.isPetRelated = petTerms.some(term => query.toLowerCase().includes(term)) || result.isPetRelated;
   
   // Check for product-related terms
-  result.isProductRelated = productTerms.some(term => query.includes(term));
+  result.isProductRelated = productTerms.some(term => query.toLowerCase().includes(term));
 
   // Extract keywords (words with 3+ characters)
-  result.keywords = query.split(/\s+/).filter(word => word.length >= 3);
+  result.keywords = query.toLowerCase().split(/\s+/).filter(word => word.length >= 3);
   
   // Check for dog or cat
-  if (query.includes('dog') || query.includes('puppy')) {
+  if (query.toLowerCase().includes('dog') || query.toLowerCase().includes('puppy')) {
     result.petTypes.push('dog');
   }
-  if (query.includes('cat') || query.includes('kitten')) {
+  if (query.toLowerCase().includes('cat') || query.toLowerCase().includes('kitten')) {
     result.petTypes.push('cat');
   }
   
   // Check for breeds
   dogBreeds.forEach(breed => {
-    if (query.includes(breed)) {
+    if (query.toLowerCase().includes(breed)) {
       result.breeds.push(breed);
     }
   });
   
   catBreeds.forEach(breed => {
-    if (query.includes(breed)) {
+    if (query.toLowerCase().includes(breed)) {
       result.breeds.push(breed);
-    }
-  });
-  
-  // Check for locations
-  locations.forEach(location => {
-    if (query.includes(location)) {
-      result.locations.push(location);
     }
   });
   
   // Check for product categories
   productCategories.forEach(category => {
-    if (query.includes(category)) {
+    if (query.toLowerCase().includes(category)) {
       result.categories.push(category);
     }
   });
+  
+  // Check for gender
+  if (maleTerms.some(term => query.toLowerCase().includes(term))) {
+    result.gender = 'male';
+  } else if (femaleTerms.some(term => query.toLowerCase().includes(term))) {
+    result.gender = 'female';
+  }
   
   // Check for price information
   const priceMatch = query.match(/(\d+)(?:\s*-\s*(\d+))?(?:\s*\$|\$\s*)/);
@@ -150,6 +175,27 @@ function processSearchQuery(query) {
         const price = parseInt(priceMatch[1]);
         result.priceRange.min = Math.max(0, price * 0.8);
         result.priceRange.max = price * 1.2;
+      }
+    }
+  }
+  
+  // Check for age ranges - various formats like "1-5 years", "2 years old", etc.
+  const ageRangeMatch = query.match(/(\d+)(?:\s*-\s*(\d+))?(?:\s*years?|\s*months?)/i);
+  if (ageRangeMatch) {
+    if (ageRangeMatch[1] && ageRangeMatch[2]) {
+      // Range like "1-5 years"
+      result.ageRange.min = parseInt(ageRangeMatch[1]);
+      result.ageRange.max = parseInt(ageRangeMatch[2]);
+    } else if (ageRangeMatch[1]) {
+      // Just "2 years" - we'll interpret as approximate
+      const age = parseInt(ageRangeMatch[1]);
+      // If the unit is months, convert to years
+      if (query.includes('month')) {
+        result.ageRange.min = Math.max(0, (age / 12) - 0.5);
+        result.ageRange.max = (age / 12) + 0.5;
+      } else {
+        result.ageRange.min = Math.max(0, age - 1);
+        result.ageRange.max = age + 1;
       }
     }
   }
@@ -224,7 +270,7 @@ async function searchPets(info) {
   
   // Pet type filter
   if (info.petTypes.length > 0) {
-    query.animalType = { $in: info.petTypes.map(type => new RegExp(type, 'i')) };
+    query.type = { $in: info.petTypes.map(type => new RegExp(type, 'i')) };
   }
   
   // Breed filter
@@ -237,29 +283,40 @@ async function searchPets(info) {
     query.location = { $in: info.locations.map(location => new RegExp(location, 'i')) };
   }
   
-  // Text search for name and description
+  // Age range filter
+  if (info.ageRange.min !== null || info.ageRange.max !== null) {
+    query.age = {};
+    if (info.ageRange.min !== null) {
+      query.age.$gte = info.ageRange.min;
+    }
+    if (info.ageRange.max !== null) {
+      query.age.$lte = info.ageRange.max;
+    }
+  }
+  
+  // Gender filter
+  if (info.gender) {
+    query.gender = new RegExp(info.gender, 'i');
+  }
+  
+  // Text search
   const textSearchTerms = [...info.keywords];
   const textSearchQuery = textSearchTerms.join(' ');
   
   try {
     let pets;
     if (textSearchTerms.length > 0) {
-      // Use regex search
-      pets = await Pet.find(
-        { 
-          $and: [
-            query,
-            { 
-              $or: [
-                { name: { $regex: textSearchQuery, $options: 'i' } },
-                { description: { $regex: textSearchQuery, $options: 'i' } },
-                { breed: { $regex: textSearchQuery, $options: 'i' } },
-                { location: { $regex: textSearchQuery, $options: 'i' } }
-              ]
-            }
-          ]
-        }
-      ).limit(20);
+      pets = await Pet.find({
+        $and: [
+          query,
+          {
+            $or: [
+              { name: { $regex: textSearchQuery, $options: 'i' } },
+              { description: { $regex: textSearchQuery, $options: 'i' } },
+            ]
+          }
+        ]
+      }).limit(20);
     } else {
       pets = await Pet.find(query).limit(20);
     }

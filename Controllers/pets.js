@@ -26,23 +26,72 @@ router.get('/', async (req, res) => {
  */
 router.get('/search', async (req, res) => {
     try {
-        const { query } = req.query;
+        const { query, type, breed, location, gender, minAge, maxAge } = req.query;
         
-        if (!query) {
-            return res.status(400).json({ message: 'Search query is required' });
+        // Log search request for debugging
+        console.log('Pet search request:', {
+            query, type, breed, location, gender, minAge, maxAge
+        });
+        
+        // Build the search query object
+        const searchQuery = {};
+        
+        // If we have a text query, add regex search
+        if (query) {
+            // Check if the query might be a location
+            const isLocationQuery = !type && !breed && !location && !gender && !minAge && !maxAge;
+            
+            if (isLocationQuery) {
+                // When searching only by query text and it might be a location,
+                // prioritize location matching
+                searchQuery.location = new RegExp(query, 'i');
+                console.log(`Location-based search detected: ${query}`);
+            } else {
+                // Regular search with all fields
+                const searchRegex = new RegExp(query, 'i');
+                searchQuery.$or = [
+                    { name: searchRegex },
+                    { breed: searchRegex },
+                    { type: searchRegex },
+                    { location: searchRegex },
+                    { description: searchRegex }
+                ];
+            }
         }
         
-        const searchRegex = new RegExp(query, 'i');
+        // Add specific filters if provided
+        if (type) {
+            searchQuery.type = new RegExp(type, 'i');
+        }
         
-        const pets = await Pet.find({
-            $or: [
-                { name: searchRegex },
-                { breed: searchRegex },
-                { type: searchRegex },
-                { location: searchRegex },
-                { description: searchRegex }
-            ]
-        }).sort({ createdAt: -1 });
+        if (breed) {
+            searchQuery.breed = new RegExp(breed, 'i');
+        }
+        
+        if (location) {
+            searchQuery.location = new RegExp(location, 'i');
+        }
+        
+        if (gender) {
+            searchQuery.gender = new RegExp(gender, 'i');
+        }
+        
+        // Handle age range
+        if (minAge || maxAge) {
+            searchQuery.age = {};
+            if (minAge) {
+                searchQuery.age.$gte = parseInt(minAge);
+            }
+            if (maxAge) {
+                searchQuery.age.$lte = parseInt(maxAge);
+            }
+        }
+        
+        // Log the final query for debugging
+        console.log('Pet search MongoDB query:', JSON.stringify(searchQuery));
+        
+        const pets = await Pet.find(searchQuery).sort({ createdAt: -1 });
+        console.log(`Found ${pets.length} pets matching criteria`);
         
         res.status(200).json(pets);
     } catch (error) {

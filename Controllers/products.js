@@ -253,6 +253,95 @@ router.post('/:id/reviews', protect, async (req, res) => {
 });
 
 /**
+ * @route GET /api/products/search
+ * @desc Search products by query
+ * @access Public
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const { query, category, petType, minPrice, maxPrice, sort } = req.query;
+    
+    // Log request parameters for debugging
+    console.log('Product search request:', {
+      query, category, petType, minPrice, maxPrice, sort
+    });
+    
+    // Build the search query object
+    const searchQuery = {
+      isActive: true
+    };
+    
+    // If we have a text query, add regex search
+    if (query) {
+      const searchRegex = new RegExp(query, 'i');
+      searchQuery.$or = [
+        { name: searchRegex },
+        { description: searchRegex },
+        { brand: searchRegex },
+        { category: searchRegex },
+        { tags: searchRegex }
+      ];
+    }
+    
+    // Add category filter
+    if (category) {
+      searchQuery.category = new RegExp(category, 'i');
+    }
+    
+    // Add pet type filter
+    if (petType) {
+      // Handle both array and string formats for petType
+      searchQuery.petType = typeof petType === 'string' ? 
+        { $regex: petType, $options: 'i' } : 
+        { $in: petType.map(type => new RegExp(type, 'i')) };
+    }
+    
+    // Add price range
+    if (minPrice || maxPrice) {
+      searchQuery.price = {};
+      if (minPrice) {
+        searchQuery.price.$gte = parseFloat(minPrice);
+      }
+      if (maxPrice) {
+        searchQuery.price.$lte = parseFloat(maxPrice);
+      }
+    }
+    
+    // Prepare the sort options
+    let sortOptions = { createdAt: -1 }; // Default sort by newest
+    
+    if (sort) {
+      switch (sort) {
+        case 'price-low-high':
+          sortOptions = { price: 1 };
+          break;
+        case 'price-high-low':
+          sortOptions = { price: -1 };
+          break;
+        case 'featured':
+          sortOptions = { featured: -1, createdAt: -1 };
+          break;
+        // Keep the default for 'newest' and any unknown sort option
+      }
+    }
+    
+    console.log('MongoDB query:', JSON.stringify(searchQuery));
+    console.log('Sort options:', sortOptions);
+    
+    // Execute the search query
+    const products = await Product.find(searchQuery).sort(sortOptions);
+    
+    console.log(`Found ${products.length} products matching criteria`);
+    
+    // Always return a 200 response with the products (even if empty)
+    return res.status(200).json(products);
+  } catch (error) {
+    console.error('Error searching products:', error);
+    res.status(500).json({ message: 'Server error during product search' });
+  }
+});
+
+/**
  * @route GET /api/products/search/:keyword
  * @desc Search products
  * @access Public
@@ -283,36 +372,112 @@ router.get('/search/:keyword', async (req, res) => {
 });
 
 /**
- * @route GET /api/products/search
- * @desc Search products by query
+ * @route GET /api/products/filtered
+ * @desc Search and filter products by various criteria
  * @access Public
  */
-router.get('/search', async (req, res) => {
+router.get('/filtered', async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, category, petType, minPrice, maxPrice, sort } = req.query;
     
-    if (!query) {
-      return res.status(400).json({ message: 'Search query is required' });
-    }
+    // Log request parameters for debugging
+    console.log('Filtered product search request:', {
+      query, category, petType, minPrice, maxPrice, sort
+    });
     
+    // Build the search query object
+    const searchQuery = {
+      isActive: true
+    };
+    
+    // If we have a text query, add regex search
+    if (query) {
     const searchRegex = new RegExp(query, 'i');
-    
-    const products = await Product.find({
-      isActive: true,
-      $or: [
+      searchQuery.$or = [
         { name: searchRegex },
         { description: searchRegex },
         { brand: searchRegex },
         { category: searchRegex },
         { tags: searchRegex }
-      ]
-    }).sort({ createdAt: -1 });
+      ];
+    }
     
-    res.status(200).json(products);
+    // Add category filter
+    if (category) {
+      searchQuery.category = new RegExp(category, 'i');
+    }
+    
+    // Add pet type filter
+    if (petType) {
+      // Handle both array and string formats for petType
+      searchQuery.petType = typeof petType === 'string' ? 
+        { $regex: petType, $options: 'i' } : 
+        { $in: petType.map(type => new RegExp(type, 'i')) };
+    }
+    
+    // Add price range
+    if (minPrice || maxPrice) {
+      searchQuery.price = {};
+      if (minPrice) {
+        searchQuery.price.$gte = parseFloat(minPrice);
+      }
+      if (maxPrice) {
+        searchQuery.price.$lte = parseFloat(maxPrice);
+      }
+    }
+    
+    // Prepare the sort options
+    let sortOptions = { createdAt: -1 }; // Default sort by newest
+    
+    if (sort) {
+      switch (sort) {
+        case 'price-low-high':
+          sortOptions = { price: 1 };
+          break;
+        case 'price-high-low':
+          sortOptions = { price: -1 };
+          break;
+        case 'featured':
+          sortOptions = { featured: -1, createdAt: -1 };
+          break;
+        // Keep the default for 'newest' and any unknown sort option
+      }
+    }
+    
+    console.log('MongoDB query:', JSON.stringify(searchQuery));
+    console.log('Sort options:', sortOptions);
+    
+    // Execute the search query
+    const products = await Product.find(searchQuery).sort(sortOptions);
+    
+    console.log(`Found ${products.length} products matching criteria`);
+    
+    // Always return a 200 response with the products (even if empty)
+    return res.status(200).json(products);
   } catch (error) {
-    console.error('Error searching products:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error in filtered products search:', error);
+    res.status(500).json({ message: 'Server error during filtered product search' });
   }
+});
+
+/**
+ * @route GET /api/products/test
+ * @desc Test route to verify server is working
+ * @access Public
+ */
+router.get('/test', (req, res) => {
+  console.log('Test route reached!', { 
+    query: req.query,
+    url: req.url,
+    method: req.method,
+    headers: req.headers
+  });
+  
+  return res.status(200).json({ 
+    success: true, 
+    message: 'Products API is working',
+    query: req.query
+  });
 });
 
 module.exports = router; 
